@@ -1,0 +1,16 @@
+name: build
+on: [push, workflow_dispatch]
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyinstaller ttkthemes
+      - run: pyinstaller --onefile --windowed --name SnapticModder --add-data "files;files" launcher.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SnapticModder
+          path: dist/SnapticModder.exe
