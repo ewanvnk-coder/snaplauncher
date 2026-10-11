@@ -236,14 +236,14 @@ class keydialog(toplevel):
         self.entry.pack(padx=20, pady=5)
         self.entry.focus()
         
-        self.entry.bind("<control-v>", self.paste)
-        self.entry.bind("<control-v>", self.paste)
+        self.entry.bind("<Control-v>", self.paste)
+        self.entry.bind("<Control-V>", self.paste)
         
         btn_frame = frame(self)
         btn_frame.pack(fill="x", padx=20, pady=10)
         button(btn_frame, text="submit", command=self.submit).pack(side="right")
         
-        self.bind("<return>", lambda e: self.submit())
+        self.bind("<Return>", lambda e: self.submit())
         
     def paste(self, event=None):
         try:
