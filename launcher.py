@@ -17,44 +17,35 @@ try:
 except ImportError:
     tomllib = None
 
-path = Path
-themedtk = ThemedTk
-toplevel = tk.Toplevel
-menu = tk.Menu
-frame = ttk.Frame
-label = ttk.Label
-button = ttk.Button
-entry = ttk.Entry
-labelframe = ttk.LabelFrame
-treeview = ttk.Treeview
-scrollbar = ttk.Scrollbar
-text_widget = tk.Text
-
 system = platform.system()
 is_win = system == "Windows"
 is_mac = system == "Darwin"
 is_linux = system == "Linux"
-game_exes = ["snaptic.exe", "snaptic.exe", "snaptic.exe"]
+
+game_exes = ["snaptic.exe", "Snaptic.exe", "SNAPTIC.exe"]
 loader_name = "winmm.dll"
 rungame_url = "steam://rungameid/5273300"
-here = path(__file__).parent.resolve()
-workspace = path.home() / ".snaptic_modder"
+key = "eb74e928c34749204a5bae90975743d700c5a38827c0f51bdde11a8747a9e6e0"
+
+here = Path(__file__).parent.resolve()
+workspace = Path.home() / ".snaptic_modder"
 mods_dir = workspace / "mods"
 config_path = workspace / "config.json"
-
 for d in (workspace, mods_dir):
     d.mkdir(parents=True, exist_ok=True)
+
 
 def bundled(name):
     roots = [here, here / "files"]
     mei = getattr(sys, "_MEIPASS", None)
     if mei:
-        roots += [path(mei), path(mei) / "files"]
+        roots += [Path(mei), Path(mei) / "files"]
     for base in roots:
         p = base / name
         if p.exists():
             return p
     return None
+
 
 def load_config():
     if config_path.exists():
@@ -64,8 +55,10 @@ def load_config():
             pass
     return {}
 
+
 def save_config(c):
     config_path.write_text(json.dumps(c, indent=2))
+
 
 def parse_toml(text):
     if tomllib:
@@ -92,8 +85,9 @@ def parse_toml(text):
                 out[k.strip()] = v
     return out
 
-def write_key(path_obj, key_val):
-    text = path_obj.read_text() if path_obj.exists() else ""
+
+def write_key(path):
+    text = path.read_text() if path.exists() else ""
     if "encryption_key" in text:
         return
     lines = text.rstrip().splitlines()
@@ -102,28 +96,29 @@ def write_key(path_obj, key_val):
         for line in lines:
             out.append(line)
             if line.strip() == "[game]":
-                out.append('encryption_key = "' + key_val + '"')
+                out.append('encryption_key = "' + key + '"')
     else:
-        out = lines + ["", "[game]", 'encryption_key = "' + key_val + '"']
-    path_obj.write_text("\n".join(out) + "\n")
+        out = lines + ["", "[game]", 'encryption_key = "' + key + '"']
+    path.write_text("\n".join(out) + "\n")
+
 
 def steam_roots():
     out = []
     if is_win:
-        for env in ("programfiles(x86)", "programfiles", "programw6432"):
+        for env in ("PROGRAMFILES(X86)", "PROGRAMFILES", "PROGRAMW6432"):
             v = os.environ.get(env)
             if v:
-                out.append(path(v) / "steam")
-        out += [path("c:/program files (x86)/steam"), path("c:/program files/steam")]
+                out.append(Path(v) / "Steam")
+        out += [Path("C:/Program Files (x86)/Steam"), Path("C:/Program Files/Steam")]
     elif is_mac:
-        out.append(path.home() / "library/application support/steam")
+        out.append(Path.home() / "Library/Application Support/Steam")
     else:
         out = [
-            path.home() / ".var/app/com.valvesoftware.steam/data/steam",
-            path.home() / ".var/app/com.valvesoftware.steam/.local/share/steam",
-            path.home() / ".steam/steam",
-            path.home() / ".local/share/steam",
-            path.home() / "snap/steam/common/.local/share/steam",
+            Path.home() / ".var/app/com.valvesoftware.Steam/data/Steam",
+            Path.home() / ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+            Path.home() / ".steam/steam",
+            Path.home() / ".local/share/Steam",
+            Path.home() / "snap/steam/common/.local/share/Steam",
         ]
     seen = []
     for p in out:
@@ -135,6 +130,7 @@ def steam_roots():
             pass
     return seen
 
+
 def all_libraries():
     libs = []
     for root in steam_roots():
@@ -144,12 +140,13 @@ def all_libraries():
         if vdf.exists():
             try:
                 for m in re.finditer(r'"path"\s+"([^"]+)"', vdf.read_text(errors="ignore")):
-                    p = path(m.group(1).replace("\\", "/"))
+                    p = Path(m.group(1).replace("\\\\", "\\"))
                     if p.exists() and p not in libs:
                         libs.append(p)
             except Exception:
                 pass
     return libs
+
 
 def find_game():
     for lib in all_libraries():
@@ -165,6 +162,7 @@ def find_game():
                 return entry
     return None
 
+
 def launch_steam(url):
     if is_win:
         cmd = ["cmd", "/c", "start", "", url]
@@ -172,26 +170,27 @@ def launch_steam(url):
         cmd = ["open", url]
     else:
         cmd = None
-    for candidate in (
-        ["flatpak", "run", "com.valvesoftware.steam", url],
-        ["steam", url],
-        ["xdg-open", url],
-    ):
-        if shutil.which(candidate[0]):
-            cmd = candidate
-            break
-    if not cmd:
-        return False
+        for candidate in (
+            ["flatpak", "run", "com.valvesoftware.Steam", url],
+            ["steam", url],
+            ["xdg-open", url],
+        ):
+            if shutil.which(candidate[0]):
+                cmd = candidate
+                break
+        if not cmd:
+            return False
     try:
-        subprocess.popen(cmd, stdout=subprocess.devnull, stderr=subprocess.devnull)
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except Exception:
         return False
 
-def install_loader(game, log_func):
+
+def install_loader(game, log):
     src = bundled(loader_name) or bundled("gdpatch_loader.dll")
     if not src:
-        log_func("loader not bundled")
+        log("loader not bundled")
         return False
     dst = game / loader_name
     backup = game / (loader_name + ".orig")
@@ -199,14 +198,15 @@ def install_loader(game, log_func):
         if dst.exists() and not backup.exists():
             shutil.copy2(dst, backup)
         shutil.copy2(src, dst)
-        log_func("loader installed")
+        log("loader installed")
         return True
     except Exception as e:
-        log_func("loader install failed: " + str(e))
+        log("loader install failed: " + str(e))
         return False
 
-def sync_mods(game, key_val, log_func):
-    target = game / "gdpatch" / "mods"
+
+def sync_mods(game, log):
+    target = game / "GDPatch" / "mods"
     target.mkdir(parents=True, exist_ok=True)
     n = 0
     for entry in mods_dir.iterdir():
@@ -218,65 +218,24 @@ def sync_mods(game, key_val, log_func):
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(entry, dst)
-        write_key(dst / "gdpatch_mod.toml", key_val)
+        write_key(dst / "gdpatch_mod.toml")
         n += 1
-    log_func("synced " + str(n) + " mod(s)")
+    log("synced " + str(n) + " mod(s)")
     return n
 
-class keydialog(toplevel):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title("snaptic modder")
-        self.geometry("380x150")
-        self.resizable(False, False)
-        self.key = None
-        
-        label(self, text="enter encryption key:").pack(padx=20, pady=(20, 5), anchor="w")
-        self.entry = entry(self, width=45, show="*")
-        self.entry.pack(padx=20, pady=5)
-        self.entry.focus()
-        
-        self.entry.bind("<Control-v>", self.paste)
-        self.entry.bind("<Control-V>", self.paste)
-        
-        btn_frame = frame(self)
-        btn_frame.pack(fill="x", padx=20, pady=10)
-        button(btn_frame, text="submit", command=self.submit).pack(side="right")
-        
-        self.bind("<Return>", lambda e: self.submit())
-        
-    def paste(self, event=None):
-        try:
-            self.entry.insert("insert", self.clipboard_get())
-        except Exception:
-            pass
-        return "break"
-        
-    def submit(self):
-        self.key = self.entry.get()
-        self.destroy()
 
 class modder:
     def __init__(self):
-        self.root = themedtk(theme="arc")
+        self.root = ThemedTk(theme="arc")
         self.root.title("snaptic modder")
         self.root.geometry("920x640")
         self.root.minsize(760, 500)
-        
-        self.root.withdraw()
-        dlg = keydialog(self.root)
-        self.root.wait_window(dlg)
-        self.key = dlg.key
-        
-        if not self.key:
-            sys.exit(0)
-        self.root.deiconify()
-
         self.cfg = load_config()
+
         self.game = None
         gp = self.cfg.get("game_path")
-        if gp and path(gp).exists():
-            self.game = path(gp)
+        if gp and Path(gp).exists():
+            self.game = Path(gp)
         if not self.game:
             self.game = find_game()
 
@@ -285,60 +244,60 @@ class modder:
         self.log("game: " + str(self.game) if self.game else "game not found")
 
     def build(self):
-        menubar = menu(self.root)
-        fm = menu(menubar, tearoff=0)
+        menubar = tk.Menu(self.root)
+        fm = tk.Menu(menubar, tearoff=0)
         fm.add_command(label="set game folder", command=self.browse)
         fm.add_command(label="auto-detect", command=self.detect)
         fm.add_separator()
         fm.add_command(label="quit", command=self.root.quit)
         menubar.add_cascade(label="file", menu=fm)
 
-        mm = menu(menubar, tearoff=0)
+        mm = tk.Menu(menubar, tearoff=0)
         mm.add_command(label="open mods folder", command=self.open_mods)
         mm.add_command(label="install from zip", command=self.install_zip)
         mm.add_command(label="refresh", command=self.refresh_mods)
         menubar.add_cascade(label="mods", menu=mm)
 
-        am = menu(menubar, tearoff=0)
+        am = tk.Menu(menubar, tearoff=0)
         am.add_command(label="about", command=self.about)
         menubar.add_cascade(label="help", menu=am)
         self.root.config(menu=menubar)
 
-        outer = frame(self.root)
+        outer = ttk.Frame(self.root)
         outer.pack(fill="both", expand=True)
 
-        sidebar = frame(outer, width=180)
+        sidebar = ttk.Frame(outer, width=180)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
-        label(sidebar, text="snaptic", font=("", 12, "bold")).pack(
+        ttk.Label(sidebar, text="snaptic", font=("", 12, "bold")).pack(
             anchor="w", padx=14, pady=(18, 0))
-        label(sidebar, text="modder", font=("", 9)).pack(
+        ttk.Label(sidebar, text="modder", font=("", 9)).pack(
             anchor="w", padx=14, pady=(0, 18))
-        for label_text in ("installed", "settings", "log"):
-            button(sidebar, text=label_text,
-                   command=lambda n=label_text: self.nav(n)).pack(
+        for label in ("installed", "settings", "log"):
+            ttk.Button(sidebar, text=label,
+                       command=lambda n=label: self.nav(n)).pack(
                 fill="x", padx=10, pady=2)
         ttk.Separator(sidebar, orient="horizontal").pack(fill="x", padx=10, pady=14)
 
-        self.side_game = label(sidebar, text="(no game)",
-                                   wraplength=160, foreground="#888")
+        self.side_game = ttk.Label(sidebar, text="(no game)",
+                                    wraplength=160, foreground="#888")
         self.side_game.pack(anchor="w", padx=14)
-        self.side_status = label(sidebar, text="", wraplength=160, foreground="#888")
+        self.side_status = ttk.Label(sidebar, text="", wraplength=160, foreground="#888")
         self.side_status.pack(anchor="w", padx=14, pady=(4, 0))
         self.update_side()
-        button(sidebar, text="change...", command=self.browse).pack(
+        ttk.Button(sidebar, text="change...", command=self.browse).pack(
             fill="x", padx=10, pady=(6, 0))
 
-        self.stack = frame(outer)
+        self.stack = ttk.Frame(outer)
         self.stack.pack(side="left", fill="both", expand=True)
         self.stack.rowconfigure(0, weight=1)
         self.stack.columnconfigure(0, weight=1)
 
-        bar = frame(self.root)
+        bar = ttk.Frame(self.root)
         bar.pack(side="bottom", fill="x")
-        self.status = label(bar, text="ready", anchor="w")
+        self.status = ttk.Label(bar, text="ready", anchor="w")
         self.status.pack(side="left", padx=8, pady=3)
-        self.launch_btn = button(bar, text="launch modded",
+        self.launch_btn = ttk.Button(bar, text="launch modded",
                                       command=self.launch_clicked)
         self.launch_btn.pack(side="right", padx=8, pady=3)
 
@@ -352,64 +311,64 @@ class modder:
         self.nav("installed")
 
     def page_installed(self):
-        f = frame(self.stack)
-        top = frame(f)
+        f = ttk.Frame(self.stack)
+        top = ttk.Frame(f)
         top.pack(fill="x", padx=12, pady=(12, 6))
-        label(top, text="installed mods", font=("", 11, "bold")).pack(side="left")
-        button(top, text="install zip",
+        ttk.Label(top, text="installed mods", font=("", 11, "bold")).pack(side="left")
+        ttk.Button(top, text="install zip",
                    command=self.install_zip).pack(side="right", padx=(4, 0))
-        button(top, text="open folder",
+        ttk.Button(top, text="open folder",
                    command=self.open_mods).pack(side="right", padx=(4, 0))
-        button(top, text="refresh",
+        ttk.Button(top, text="refresh",
                    command=self.refresh_mods).pack(side="right")
 
         cols = ("name", "version", "author", "id")
-        self.tree = treeview(f, columns=cols, show="headings", selectmode="browse")
+        self.tree = ttk.Treeview(f, columns=cols, show="headings", selectmode="browse")
         for c, w in (("name", 280), ("version", 90), ("author", 140), ("id", 180)):
             self.tree.heading(c, text=c)
             self.tree.column(c, width=w, anchor="w")
-        ysb = scrollbar(f, orient="vertical", command=self.tree.yview)
+        ysb = ttk.Scrollbar(f, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscroll=ysb.set)
         self.tree.pack(side="left", fill="both", expand=True, padx=(12, 0), pady=(0, 12))
         ysb.pack(side="left", fill="y", pady=(0, 12), padx=(0, 12))
-        self.tree.bind("<delete>", lambda e: self.remove_selected())
+        self.tree.bind("<Delete>", lambda e: self.remove_selected())
         return f
 
     def page_settings(self):
-        f = frame(self.stack)
-        box = labelframe(f, text="game folder")
+        f = ttk.Frame(self.stack)
+        box = ttk.LabelFrame(f, text="game folder")
         box.pack(fill="x", padx=14, pady=14)
-        self.path_var = label(box,
+        self.path_var = ttk.Label(box,
                                   text=str(self.game) if self.game else "(not set)",
                                   wraplength=680)
         self.path_var.pack(anchor="w", padx=10, pady=(8, 4))
-        row = frame(box)
+        row = ttk.Frame(box)
         row.pack(fill="x", padx=10, pady=(0, 10))
-        button(row, text="detect", command=self.detect).pack(side="left")
-        button(row, text="browse", command=self.browse).pack(side="left", padx=(6, 0))
-        button(row, text="open folder",
+        ttk.Button(row, text="detect", command=self.detect).pack(side="left")
+        ttk.Button(row, text="browse", command=self.browse).pack(side="left", padx=(6, 0))
+        ttk.Button(row, text="open folder",
                    command=self.open_game_folder).pack(side="left", padx=(6, 0))
 
-        box2 = labelframe(f, text="mods")
+        box2 = ttk.LabelFrame(f, text="mods")
         box2.pack(fill="x", padx=14, pady=(0, 14))
-        label(box2, text=str(mods_dir),
+        ttk.Label(box2, text=str(mods_dir),
                   wraplength=680).pack(anchor="w", padx=10, pady=(8, 4))
-        button(box2, text="open folder",
+        ttk.Button(box2, text="open folder",
                    command=self.open_mods).pack(anchor="w", padx=10, pady=(0, 10))
         return f
 
     def page_log(self):
-        f = frame(self.stack)
-        top = frame(f)
+        f = ttk.Frame(self.stack)
+        top = ttk.Frame(f)
         top.pack(fill="x", padx=12, pady=(12, 6))
-        label(top, text="log", font=("", 11, "bold")).pack(side="left")
-        button(top, text="clear", command=self.clear_log).pack(side="right")
-        inner = frame(f)
+        ttk.Label(top, text="log", font=("", 11, "bold")).pack(side="left")
+        ttk.Button(top, text="clear", command=self.clear_log).pack(side="right")
+        inner = ttk.Frame(f)
         inner.pack(fill="both", expand=True, padx=12, pady=(0, 12))
-        self.log_box = text_widget(inner, wrap="word", height=10, relief="solid",
+        self.log_box = tk.Text(inner, wrap="word", height=10, relief="solid",
                                borderwidth=1, font=("monospace", 9))
         self.log_box.pack(side="left", fill="both", expand=True)
-        ysb = scrollbar(inner, orient="vertical", command=self.log_box.yview)
+        ysb = ttk.Scrollbar(inner, orient="vertical", command=self.log_box.yview)
         self.log_box.configure(yscrollcommand=ysb.set, state="disabled")
         ysb.pack(side="left", fill="y")
         return f
@@ -455,7 +414,7 @@ class modder:
                 vals = (
                     meta.get("name", entry.name),
                     meta.get("version", "?"),
-                    meta.get("author", "?"),
+                    meta.get("authors", "?"),
                     d.get("id", entry.name),
                 )
             except Exception:
@@ -506,7 +465,7 @@ class modder:
                     with z.open(name) as src, open(t, "wb") as dst:
                         shutil.copyfileobj(src, dst)
             self.refresh_mods()
-            self.log("installed " + path(p).name)
+            self.log("installed " + Path(p).name)
         except Exception as e:
             messagebox.showerror("install failed", str(e))
 
@@ -532,7 +491,7 @@ class modder:
         c = filedialog.askdirectory(title="select snaptic folder")
         if not c:
             return
-        self.game = path(c)
+        self.game = Path(c)
         self.cfg["game_path"] = c
         save_config(self.cfg)
         self.path_var.config(text=c)
@@ -569,7 +528,7 @@ class modder:
         try:
             if not install_loader(self.game, self.log):
                 return
-            sync_mods(self.game, self.key, self.log)
+            sync_mods(self.game, self.log)
             self.log("launching via steam")
             if launch_steam(rungame_url):
                 self.log("steam launch sent")
@@ -582,8 +541,10 @@ class modder:
         self.refresh_mods()
         self.root.mainloop()
 
+
 def main():
     modder().run()
+
 
 if __name__ == "__main__":
     main()
