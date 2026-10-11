@@ -9,7 +9,7 @@ import threading
 import zipfile
 import tkinter as tk
 from pathlib import Path
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 from ttkthemes import ThemedTk
 
 try:
@@ -21,19 +21,16 @@ system = platform.system()
 is_win = system == "Windows"
 is_mac = system == "Darwin"
 is_linux = system == "Linux"
-
 game_exes = ["snaptic.exe", "Snaptic.exe", "SNAPTIC.exe"]
 loader_name = "winmm.dll"
 rungame_url = "steam://rungameid/5273300"
-key = "eb74e928c34749204a5bae90975743d700c5a38827c0f51bdde11a8747a9e6e0"
-
 here = Path(__file__).parent.resolve()
 workspace = Path.home() / ".snaptic_modder"
 mods_dir = workspace / "mods"
 config_path = workspace / "config.json"
+
 for d in (workspace, mods_dir):
     d.mkdir(parents=True, exist_ok=True)
-
 
 def bundled(name):
     roots = [here, here / "files"]
@@ -46,7 +43,6 @@ def bundled(name):
             return p
     return None
 
-
 def load_config():
     if config_path.exists():
         try:
@@ -55,10 +51,8 @@ def load_config():
             pass
     return {}
 
-
 def save_config(c):
     config_path.write_text(json.dumps(c, indent=2))
-
 
 def parse_toml(text):
     if tomllib:
@@ -85,8 +79,7 @@ def parse_toml(text):
                 out[k.strip()] = v
     return out
 
-
-def write_key(path):
+def write_key(path, key):
     text = path.read_text() if path.exists() else ""
     if "encryption_key" in text:
         return
@@ -100,7 +93,6 @@ def write_key(path):
     else:
         out = lines + ["", "[game]", 'encryption_key = "' + key + '"']
     path.write_text("\n".join(out) + "\n")
-
 
 def steam_roots():
     out = []
@@ -130,7 +122,6 @@ def steam_roots():
             pass
     return seen
 
-
 def all_libraries():
     libs = []
     for root in steam_roots():
@@ -140,13 +131,12 @@ def all_libraries():
         if vdf.exists():
             try:
                 for m in re.finditer(r'"path"\s+"([^"]+)"', vdf.read_text(errors="ignore")):
-                    p = Path(m.group(1).replace("\\\\", "\\"))
+                    p = Path(m.group(1).replace("\\", "/"))
                     if p.exists() and p not in libs:
                         libs.append(p)
             except Exception:
                 pass
     return libs
-
 
 def find_game():
     for lib in all_libraries():
@@ -162,7 +152,6 @@ def find_game():
                 return entry
     return None
 
-
 def launch_steam(url):
     if is_win:
         cmd = ["cmd", "/c", "start", "", url]
@@ -170,22 +159,21 @@ def launch_steam(url):
         cmd = ["open", url]
     else:
         cmd = None
-        for candidate in (
-            ["flatpak", "run", "com.valvesoftware.Steam", url],
-            ["steam", url],
-            ["xdg-open", url],
-        ):
-            if shutil.which(candidate[0]):
-                cmd = candidate
-                break
-        if not cmd:
-            return False
+    for candidate in (
+        ["flatpak", "run", "com.valvesoftware.Steam", url],
+        ["steam", url],
+        ["xdg-open", url],
+    ):
+        if shutil.which(candidate[0]):
+            cmd = candidate
+            break
+    if not cmd:
+        return False
     try:
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except Exception:
         return False
-
 
 def install_loader(game, log):
     src = bundled(loader_name) or bundled("gdpatch_loader.dll")
@@ -204,8 +192,7 @@ def install_loader(game, log):
         log("loader install failed: " + str(e))
         return False
 
-
-def sync_mods(game, log):
+def sync_mods(game, key, log):
     target = game / "GDPatch" / "mods"
     target.mkdir(parents=True, exist_ok=True)
     n = 0
@@ -218,11 +205,10 @@ def sync_mods(game, log):
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(entry, dst)
-        write_key(dst / "gdpatch_mod.toml")
+        write_key(dst / "gdpatch_mod.toml", key)
         n += 1
     log("synced " + str(n) + " mod(s)")
     return n
-
 
 class modder:
     def __init__(self):
@@ -230,8 +216,14 @@ class modder:
         self.root.title("snaptic modder")
         self.root.geometry("920x640")
         self.root.minsize(760, 500)
-        self.cfg = load_config()
+        
+        self.root.withdraw()
+        self.key = simpledialog.askstring("snaptic modder", "enter encryption key:", show="*")
+        if not self.key:
+            sys.exit(0)
+        self.root.deiconify()
 
+        self.cfg = load_config()
         self.game = None
         gp = self.cfg.get("game_path")
         if gp and Path(gp).exists():
@@ -280,7 +272,7 @@ class modder:
         ttk.Separator(sidebar, orient="horizontal").pack(fill="x", padx=10, pady=14)
 
         self.side_game = ttk.Label(sidebar, text="(no game)",
-                                    wraplength=160, foreground="#888")
+                                   wraplength=160, foreground="#888")
         self.side_game.pack(anchor="w", padx=14)
         self.side_status = ttk.Label(sidebar, text="", wraplength=160, foreground="#888")
         self.side_status.pack(anchor="w", padx=14, pady=(4, 0))
@@ -414,7 +406,7 @@ class modder:
                 vals = (
                     meta.get("name", entry.name),
                     meta.get("version", "?"),
-                    meta.get("authors", "?"),
+                    meta.get("author", "?"),
                     d.get("id", entry.name),
                 )
             except Exception:
@@ -528,7 +520,7 @@ class modder:
         try:
             if not install_loader(self.game, self.log):
                 return
-            sync_mods(self.game, self.log)
+            sync_mods(self.game, self.key, self.log)
             self.log("launching via steam")
             if launch_steam(rungame_url):
                 self.log("steam launch sent")
@@ -541,10 +533,8 @@ class modder:
         self.refresh_mods()
         self.root.mainloop()
 
-
 def main():
     modder().run()
-
 
 if __name__ == "__main__":
     main()
